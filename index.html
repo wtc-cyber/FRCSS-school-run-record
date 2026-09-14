@@ -819,13 +819,13 @@
             if (secondsPerLap < 40) {
                 box.className = "p-3 rounded-lg border text-sm flex items-center justify-between bg-red-50 border-red-200 text-red-700";
                 icon.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-red-500"></i>';
-                text.textContent = "無效紀錄：配速過快（每圈少於 40 秒）";
+                text.textContent = "無效紀錄：配速過快";
                 pace.textContent = `平均每圈 ${secondsPerLap.toFixed(0)} 秒`;
                 return false;
             } else if (secondsPerLap > 180) {
                 box.className = "p-3 rounded-lg border text-sm flex items-center justify-between bg-red-50 border-red-200 text-red-700";
                 icon.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-red-500"></i>';
-                text.textContent = "無效紀錄：配速過慢（每圈超過 3 分鐘）";
+                text.textContent = "無效紀錄：配速過慢";
                 pace.textContent = `平均每圈 ${(secondsPerLap/60).toFixed(1)} 分鐘`;
                 return false;
             } else {

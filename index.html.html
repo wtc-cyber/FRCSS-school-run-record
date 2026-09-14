@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>禮賢環校跑紀錄系統及即時個人排行榜</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .house-信 { background-color: #3b82f6; color: white; }
+        .house-望 { background-color: #eab308; color: black; }
+        .house-愛 { background-color: #ef4444; color: white; }
+        .house-禮 { background-color: #22c55e; color: white; }
+        .tab-active { border-bottom: 4px solid #3b82f6; color: #1d4ed8; font-weight: bold; }
+        
+        .tv-gold { background: linear-gradient(135deg, #f59e0b 0%, #b45309 100%); border: 2px solid #fbbf24; }
+        .tv-silver { background: linear-gradient(135deg, #94a3b8 0%, #475569 100%); border: 2px solid #cbd5e1; }
+        .tv-bronze { background: linear-gradient(135deg, #d97706 0%, #78350f 100%); border: 2px solid #f59e0b; }
+        .glow-gold { box-shadow: 0 0 25px rgba(245, 158, 11, 0.4); }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+
+    <!-- Header -->
+    <header class="bg-indigo-700 text-white shadow-lg sticky top-0 z-40">
+        <div class="max-w-5xl mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <i class="fa-solid fa-person-running text-2xl text-yellow-300"></i>
+                <h1 class="text-xl font-bold tracking-wide">禮賢環校跑紀錄系統</h1>
+            </div>
+            <div class="flex items-center space-x-3">
+                <button onclick="openTVMode()" class="bg-amber-400 hover:bg-amber-500 text-indigo-950 font-black text-xs px-3 py-1.5 rounded-lg shadow transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-tv"></i> 電視 Top 10 播放
+                </button>
+                <span id="apiStatusBadge" class="text-xs bg-indigo-900 text-indigo-200 px-3 py-1 rounded-full border border-indigo-400">
+                    <i class="fa-solid fa-spinner fa-spin"></i> 連接中...
+                </span>
+            </div>
+        </div>
+        <!-- Navigation Tabs -->
+        <div class="bg-indigo-800 text-indigo-100 flex justify-center text-sm font-medium">
+            <button onclick="switchTab('submit')" id="tab-submit" class="px-6 py-2.5 tab-active flex items-center gap-2">
+                <i class="fa-solid fa-pen-to-square"></i> 學生跑步登記
+            </button>
+            <button onclick="switchTab('leaderboard')" id="tab-leaderboard" class="px-6 py-2.5 flex items-center gap-2">
+                <i class="fa-solid fa-trophy text-yellow-300"></i> 個人排行榜
+            </button>
+            <button onclick="switchTab('admin')" id="tab-admin" class="px-6 py-2.5 flex items-center gap-2">
+                <i class="fa-solid fa-lock text-yellow-300"></i> 學年管理 / 匯出紀錄
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-4xl mx-auto px-4 py-6">
+
+        <!-- 1. Student Submission Form -->
+        <section id="sec-submit" class="block">
+            <div class="bg-white rounded-xl shadow-md p-6 border border-slate-200">
+                <div class="flex items-center justify-between pb-4 mb-4 border-b">
+                    <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-user-plus text-indigo-600"></i> 填寫跑步紀錄
+                    </h2>
+                    <span class="text-xs text-slate-500">（系統將自動判斷圈數是否 Valid）</span>
+                </div>
+
+                <form id="runForm" onsubmit="handleFormSubmit(event)" class="space-y-4">
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 bg-indigo-50/50 p-4 rounded-lg border border-indigo-100">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">班別 *</label>
+                            <select id="inputClass" onchange="autoLookupStudent()" required class="w-full border rounded-lg p-2 text-sm bg-white border-slate-300 focus:ring-2 focus:ring-indigo-500">
+                                <option value="">載入中...</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">學號 *</label>
+                            <input type="number" id="inputClassNo" min="1" max="45" oninput="autoLookupStudent()" placeholder="例如: 8" required class="w-full border rounded-lg p-2 text-sm bg-white border-slate-300 focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">學生姓名</label>
+                            <input type="text" id="inputName" readonly placeholder="自動匹配" class="w-full border rounded-lg p-2 text-sm bg-slate-100 text-slate-700 font-bold border-slate-200">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">所屬社</label>
+                            <div id="houseBadgeContainer" class="h-9 flex items-center">
+                                <span id="inputHouse" class="text-xs font-bold px-3 py-1.5 rounded-md bg-slate-200 text-slate-600">未對應</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">跑圈日期 *</label>
+                            <input type="date" id="inputDate" required class="w-full border rounded-lg p-2 text-sm border-slate-300 focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">開始時間 *</label>
+                            <input type="time" id="inputStartTime" onchange="liveCheckValidation()" required class="w-full border rounded-lg p-2 text-sm border-slate-300 focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">結束時間 *</label>
+                            <input type="time" id="inputEndTime" onchange="liveCheckValidation()" required class="w-full border rounded-lg p-2 text-sm border-slate-300 focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">總共圈數 (270米/圈) *</label>
+                            <input type="number" step="0.5" id="inputLaps" min="0.5" max="50" oninput="liveCheckValidation()" placeholder="例如: 5" required class="w-full border rounded-lg p-2 text-sm border-slate-300 focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">上載 GPS 截圖 (Strava / Apple Health相片) *</label>
+                            <input type="file" id="inputScreenshot" accept="image/*" required class="w-full text-xs text-slate-500 border rounded-lg p-1.5 border-slate-300 bg-slate-50">
+                        </div>
+                    </div>
+
+                    <div id="validationPreview" class="hidden p-3 rounded-lg border text-sm flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <span id="validIcon"></span>
+                            <span id="validText" class="font-semibold"></span>
+                        </div>
+                        <span id="paceText" class="text-xs text-slate-500"></span>
+                    </div>
+
+                    <button type="submit" id="btnSubmit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg shadow transition duration-200 flex justify-center items-center gap-2">
+                        <span>提交紀錄至 Google Sheet</span>
+                    </button>
+                </form>
+            </div>
+        </section>
+
+        <!-- 2. Live Individual Leaderboard -->
+        <section id="sec-leaderboard" class="hidden">
+            <div class="bg-white rounded-xl shadow-md p-6 border border-slate-200">
+                <div class="flex flex-col md:flex-row md:items-center justify-between pb-4 mb-4 border-b gap-3">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-trophy text-yellow-500"></i> 個人圈數排行榜
+                        </h2>
+                        <p class="text-xs text-slate-500">即時同步 Google Sheet 數據（僅計算 Valid 有效圈數）</p>
+                    </div>
+
+                    <div class="flex items-center space-x-2">
+                        <button onclick="openTVMode()" class="bg-amber-400 hover:bg-amber-500 text-indigo-950 font-black text-xs px-3 py-2 rounded-lg shadow transition flex items-center gap-1.5">
+                            <i class="fa-solid fa-tv"></i> 📺 電視大螢幕 Top 10
+                        </button>
+                        <select id="filterGender" onchange="renderLeaderboard()" class="border text-xs rounded-lg p-2 bg-slate-50 border-slate-300">
+                            <option value="ALL">全部性別</option>
+                            <option value="M">男子組 (M)</option>
+                            <option value="F">女子組 (F)</option>
+                        </select>
+                        <select id="filterGrade" onchange="renderLeaderboard()" class="border text-xs rounded-lg p-2 bg-slate-50 border-slate-300">
+                            <option value="ALL">全部年級</option>
+                            <option value="1">中一</option><option value="2">中二</option><option value="3">中三</option>
+                            <option value="4">中四</option><option value="5">中五</option><option value="6">中六</option>
+                        </select>
+                        <button onclick="fetchLeaderboardFromGAS()" class="border text-xs rounded-lg px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700">
+                            <i class="fa-solid fa-rotate"></i> 重新整理
+                        </button>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-slate-100 text-slate-600 text-xs uppercase border-b">
+                            <tr>
+                                <th class="p-3">排名</th>
+                                <th class="p-3">班別</th>
+                                <th class="p-3">學號</th>
+                                <th class="p-3">中文姓名</th>
+                                <th class="p-3">性別</th>
+                                <th class="p-3">社</th>
+                                <th class="p-3 text-right">有效累計圈數</th>
+                            </tr>
+                        </thead>
+                        <tbody id="leaderboardBody" class="divide-y divide-slate-100">
+                            <tr><td colspan="7" class="p-6 text-center text-slate-400">載入排行榜中...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. Admin / CSV Upload & Year Reset Section -->
+        <section id="sec-admin" class="hidden space-y-6">
+            
+            <div class="flex justify-between items-center bg-indigo-50 border border-indigo-100 p-3 rounded-lg">
+                <span class="text-xs font-semibold text-indigo-800 flex items-center gap-1.5">
+                    <i class="fa-solid fa-user-shield text-indigo-600"></i> 管理員身分已驗證成功 (pw: 920206)
+                </span>
+                <div class="flex gap-2">
+                    <button onclick="openTVMode()" class="bg-amber-400 hover:bg-amber-500 text-indigo-950 font-black text-xs px-3 py-1.5 rounded flex items-center gap-1 shadow">
+                        <i class="fa-solid fa-tv"></i> 開啟電視廣播 Mode
+                    </button>
+                    <button onclick="lockAdminSession()" class="text-xs bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1.5 rounded flex items-center gap-1 transition">
+                        <i class="fa-solid fa-lock"></i> 鎖定頁面
+                    </button>
+                </div>
+            </div>
+
+            <!-- 社際賽事批量上載 -->
+            <div class="bg-white rounded-xl shadow-md p-6 border border-amber-200 space-y-4">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b pb-3">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-flag-checkered text-amber-500"></i> 社際環校跑 / 外部賽事數據批量上載
+                        </h2>
+                        <p class="text-xs text-amber-700 font-semibold mt-1">
+                            <i class="fa-solid fa-triangle-exclamation"></i> <strong>覆蓋機制說明：</strong>每次上載皆會『覆蓋 (Overwrite)』舊有社際數據，請確保上載檔案為最新版本。
+                        </p>
+                    </div>
+                    <button onclick="downloadHouseCSVTemplate()" class="bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs px-4 py-2.5 rounded-lg shadow flex items-center gap-2 transition shrink-0">
+                        <i class="fa-solid fa-file-csv text-sm"></i> 下載依現有名冊匯出的社際 CSV 表格
+                    </button>
+                </div>
+
+                <div class="border-2 border-dashed border-amber-300 p-6 rounded-xl text-center bg-amber-50/50 hover:bg-amber-50 transition cursor-pointer" onclick="document.getElementById('houseCsvFileInput').click()">
+                    <i class="fa-solid fa-cloud-arrow-up text-4xl text-amber-500 mb-2"></i>
+                    <p class="text-sm font-bold text-slate-800">點擊選擇社際賽事 CSV 檔案</p>
+                    <p class="text-xs text-red-600 font-bold mt-1">⚠️ 警示：重新上載此檔案將直接「覆蓋」並替代上次上載的社際紀錄！</p>
+                    <input type="file" id="houseCsvFileInput" accept=".csv" onchange="handleHouseCSVUpload(event)" class="hidden">
+                </div>
+                <div id="houseUploadStatus" class="hidden p-3 rounded-lg text-xs font-semibold"></div>
+            </div>
+
+            <!-- 上載學生名冊 (含覆蓋與圈數安全說明) -->
+            <div class="bg-white rounded-xl shadow-md p-6 border border-slate-200 space-y-6">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b pb-4">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2 mb-1">
+                            <i class="fa-solid fa-cloud-arrow-up text-indigo-600"></i> 上載新學年學生名冊 (CSV Upload)
+                        </h2>
+                        <p class="text-xs text-indigo-700 font-semibold">
+                            <i class="fa-solid fa-shield-halved"></i> <strong>安全說明：</strong>匯入新名冊會『覆蓋 (Overwrite)』舊學生名單，但『完全不會刪除』學生已累積的跑圈圈數。
+                        </p>
+                    </div>
+                    <button onclick="downloadCSVTemplate()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2.5 rounded-lg shadow flex items-center gap-2 transition shrink-0">
+                        <i class="fa-solid fa-file-excel text-sm"></i> 下載 CSV 名冊空白範本
+                    </button>
+                </div>
+
+                <div class="border-2 border-dashed border-slate-300 p-6 rounded-xl text-center bg-slate-50 hover:bg-slate-100 transition cursor-pointer" onclick="document.getElementById('csvFileInput').click()">
+                    <i class="fa-solid fa-file-csv text-4xl text-indigo-400 mb-2"></i>
+                    <p class="text-sm font-semibold text-slate-700">點擊選擇名冊 CSV 檔案（將覆蓋舊名冊）</p>
+                    <p class="text-xs text-slate-500 mt-1">✅ 安全提示：名冊覆蓋更新後，學生已登記的跑圈數據將全數安全保留。</p>
+                    <input type="file" id="csvFileInput" accept=".csv" onchange="handleCSVUpload(event)" class="hidden">
+                </div>
+                <div id="uploadStatus" class="hidden p-3 rounded-lg text-xs font-semibold"></div>
+            </div>
+
+            <!-- 備份與重置區塊 -->
+            <div class="bg-white rounded-xl shadow-md p-6 border border-slate-200 space-y-4">
+                <div class="border-b pb-3">
+                    <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-box-archive text-indigo-600"></i> 年度數據備份與跨學年重置
+                    </h2>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="p-4 rounded-lg bg-indigo-50/60 border border-indigo-100 space-y-2">
+                        <h3 class="text-sm font-bold text-indigo-900 flex items-center gap-1.5">
+                            <i class="fa-solid fa-file-export"></i> 匯出本學年總紀錄 (CSV)
+                        </h3>
+                        <button onclick="exportAnnualRecordsCSV()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-2.5 rounded-lg shadow transition flex justify-center items-center gap-2">
+                            <i class="fa-solid fa-download"></i> 下載年度總紀錄 CSV
+                        </button>
+                    </div>
+
+                    <div class="p-4 rounded-lg bg-red-50/60 border border-red-100 space-y-2">
+                        <h3 class="text-sm font-bold text-red-900 flex items-center gap-1.5">
+                            <i class="fa-solid fa-rotate-right"></i> 開啟新學年 (重置 Google Sheet 所有舊數據)
+                        </h3>
+                        <button onclick="resetNewAcademicYear()" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold text-xs py-2.5 rounded-lg shadow transition flex justify-center items-center gap-2">
+                            <i class="fa-solid fa-triangle-exclamation"></i> 重置並清空 Google Sheet 數據
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- 電視廣播 Modal -->
+    <div id="tvModal" class="hidden fixed inset-0 z-50 bg-slate-950 text-white flex flex-col p-6 md:p-10 overflow-hidden">
+        <div class="flex justify-between items-center pb-6 border-b border-slate-800">
+            <div class="flex items-center space-x-4">
+                <i class="fa-solid fa-trophy text-4xl text-yellow-400 animate-bounce"></i>
+                <div>
+                    <h1 class="text-3xl md:text-4xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-500">
+                        全校環校跑 TOP 10 榮譽榜
+                    </h1>
+                    <p class="text-xs md:text-sm text-slate-400">即時累計有效圈數榜單 (270米/圈)</p>
+                </div>
+            </div>
+            <button onclick="closeTVMode()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition">
+                <i class="fa-solid fa-xmark"></i> 離開全螢幕 (Esc)
+            </button>
+        </div>
+
+        <div class="grid grid-cols-3 gap-6 my-6 text-center">
+            <div id="tvRank2" class="tv-silver rounded-2xl p-4 flex flex-col justify-between shadow-xl transform scale-95 mt-4">
+                <div class="text-slate-200 text-sm font-black uppercase tracking-widest"><i class="fa-solid fa-medal"></i> 第二名</div>
+                <div class="my-2">
+                    <div id="tvName2" class="text-2xl font-black text-white">---</div>
+                    <div id="tvClass2" class="text-sm text-slate-200 mt-1">---</div>
+                </div>
+                <div class="bg-black/30 rounded-xl py-2">
+                    <span id="tvLaps2" class="text-3xl font-black text-white">0</span> <span class="text-xs text-slate-200">圈</span>
+                </div>
+            </div>
+
+            <div id="tvRank1" class="tv-gold glow-gold rounded-2xl p-6 flex flex-col justify-between shadow-2xl z-10">
+                <div class="text-yellow-100 text-base font-black uppercase tracking-widest flex items-center justify-center gap-1">
+                    <i class="fa-solid fa-crown text-yellow-300 text-xl"></i> 冠軍
+                </div>
+                <div class="my-2">
+                    <div id="tvName1" class="text-4xl font-black text-white drop-shadow-md">---</div>
+                    <div id="tvClass1" class="text-lg text-yellow-100 mt-1 font-bold">---</div>
+                </div>
+                <div class="bg-black/40 rounded-xl py-3 border border-yellow-300/40">
+                    <span id="tvLaps1" class="text-5xl font-black text-yellow-300 drop-shadow">0</span> <span class="text-sm text-yellow-100 font-bold">圈</span>
+                </div>
+            </div>
+
+            <div id="tvRank3" class="tv-bronze rounded-2xl p-4 flex flex-col justify-between shadow-xl transform scale-95 mt-4">
+                <div class="text-amber-100 text-sm font-black uppercase tracking-widest"><i class="fa-solid fa-medal"></i> 第三名</div>
+                <div class="my-2">
+                    <div id="tvName3" class="text-2xl font-black text-white">---</div>
+                    <div id="tvClass3" class="text-sm text-amber-100 mt-1">---</div>
+                </div>
+                <div class="bg-black/30 rounded-xl py-2">
+                    <span id="tvLaps3" class="text-3xl font-black text-white">0</span> <span class="text-xs text-amber-100">圈</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex-1 bg-slate-900/80 rounded-2xl p-4 border border-slate-800 flex flex-col justify-center">
+            <div id="tvGrid4to10" class="grid grid-cols-2 gap-3 text-sm"></div>
+        </div>
+    </div>
+
+    <script>
+        const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzzOpHV2q-Y6GpNb-TubhJguAct3Pa2X3Cq3elzIARwt34LKJvc7L9wuxGGhIbs6kkW/exec";
+        const ADMIN_PASSWORD = "920206";
+
+        let isAdminAuthenticated = false;
+        let cachedRoster = [];
+        let rawFinishData = [];
+
+        async function initApp() {
+            document.getElementById('inputDate').value = new Date().toISOString().split('T')[0];
+            await fetchRosterFromGAS();
+            await fetchLeaderboardFromGAS();
+            
+            document.addEventListener('keydown', (e) => {
+                if (e.key === "Escape") closeTVMode();
+            });
+        }
+
+        function openTVMode() {
+            renderTVLeaderboard();
+            const modal = document.getElementById('tvModal');
+            modal.classList.remove('hidden');
+            if (document.documentElement.requestFullscreen) {
+                document.documentElement.requestFullscreen().catch(() => {});
+            }
+        }
+
+        function closeTVMode() {
+            document.getElementById('tvModal').classList.add('hidden');
+            if (document.fullscreenElement && document.exitFullscreen) {
+                document.exitFullscreen().catch(() => {});
+            }
+        }
+
+        function renderTVLeaderboard() {
+            const list = getRankedList();
+            
+            for(let i=1; i<=3; i++) {
+                document.getElementById(`tvName${i}`).textContent = '虛位以待';
+                document.getElementById(`tvClass${i}`).textContent = '---';
+                document.getElementById(`tvLaps${i}`).textContent = '0';
+            }
+
+            if (list[0]) {
+                document.getElementById('tvName1').textContent = list[0].name;
+                document.getElementById('tvClass1').textContent = `${list[0].class} (${list[0].classNo}號)`;
+                document.getElementById('tvLaps1').textContent = list[0].totalLaps;
+            }
+            if (list[1]) {
+                document.getElementById('tvName2').textContent = list[1].name;
+                document.getElementById('tvClass2').textContent = `${list[1].class} (${list[1].classNo}號)`;
+                document.getElementById('tvLaps2').textContent = list[1].totalLaps;
+            }
+            if (list[2]) {
+                document.getElementById('tvName3').textContent = list[2].name;
+                document.getElementById('tvClass3').textContent = `${list[2].class} (${list[2].classNo}號)`;
+                document.getElementById('tvLaps3').textContent = list[2].totalLaps;
+            }
+
+            const grid = document.getElementById('tvGrid4to10');
+            grid.innerHTML = '';
+
+            for (let i = 3; i < 10; i++) {
+                const item = list[i];
+                const rank = i + 1;
+                const div = document.createElement('div');
+                div.className = "flex items-center justify-between bg-slate-800/60 p-3 rounded-xl border border-slate-700/60";
+                
+                if (item) {
+                    div.innerHTML = `
+                        <div class="flex items-center space-x-3">
+                            <span class="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-700 text-slate-300 font-extrabold text-sm">${rank}</span>
+                            <div>
+                                <span class="font-black text-slate-100 text-base">${item.name}</span>
+                                <span class="text-xs text-slate-400 ml-2">${item.class} (${item.classNo}號)</span>
+                            </div>
+                        </div>
+                        <div class="font-black text-amber-400 text-xl">${item.totalLaps} <span class="text-xs text-slate-400">圈</span></div>
+                    `;
+                } else {
+                    div.innerHTML = `
+                        <div class="flex items-center space-x-3">
+                            <span class="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-800 text-slate-600 font-bold text-xs">${rank}</span>
+                            <span class="text-slate-600 font-medium">虛位以待</span>
+                        </div>
+                        <span class="text-slate-600 font-bold">- 圈</span>
+                    `;
+                }
+                grid.appendChild(div);
+            }
+        }
+
+        function getRankedList() {
+            const totals = {};
+            rawFinishData.forEach(row => {
+                if (!row || row.length < 6) return;
+
+                const statusStr = String(row[11] || '').trim().toLowerCase();
+                const remarkStr = String(row[10] || '').trim().toLowerCase();
+                
+                if (statusStr.includes('invalid') || remarkStr.includes('invalid')) {
+                    return;
+                }
+
+                const cls = String(row[2] || '').trim();
+                const no = parseInt(row[3]);
+                const house = String(row[4] || '').trim();
+                const laps = parseFloat(row[5]);
+
+                if (!isNaN(laps) && laps > 0 && cls && no) {
+                    const key = `${cls}_${no}`;
+                    if (!totals[key]) {
+                        const student = cachedRoster.find(s => s.class === cls && s.classNo === no);
+                        totals[key] = {
+                            class: cls,
+                            classNo: no,
+                            name: student ? student.name : (cls + ' ' + no + '號'),
+                            gender: student ? student.gender : 'M',
+                            house: house || (student ? student.house : '未分配'),
+                            totalLaps: 0
+                        };
+                    }
+                    totals[key].totalLaps += laps;
+                }
+            });
+
+            return Object.values(totals).sort((a, b) => b.totalLaps - a.totalLaps);
+        }
+
+        function compressImage(file, maxWidth = 800, quality = 0.5) {
+            return new Promise((resolve, reject) => {
+                const timeoutTimer = setTimeout(() => reject(new Error("相片處理超時")), 8000);
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.src = event.target.result;
+                    img.onload = () => {
+                        clearTimeout(timeoutTimer);
+                        const canvas = document.createElement('canvas');
+                        let width = img.width;
+                        let height = img.height;
+                        if (width > maxWidth) {
+                            height = Math.round((height * maxWidth) / width);
+                            width = maxWidth;
+                        }
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        resolve(canvas.toDataURL('image/jpeg', quality));
+                    };
+                    img.onerror = (err) => { clearTimeout(timeoutTimer); reject(err); };
+                };
+                reader.onerror = (err) => { clearTimeout(timeoutTimer); reject(err); };
+            });
+        }
+
+        function downloadHouseCSVTemplate() {
+            let csvHeader = "\uFEFF班別,學號,學生證編號,Eng Name,中文姓名,性別,社,社際總圈數\n";
+
+            if (cachedRoster && cachedRoster.length > 0) {
+                cachedRoster.forEach(s => {
+                    const row = [
+                        `"${s.class}"`,
+                        `"${s.classNo}"`,
+                        `"${s.studentId || ''}"`,
+                        `"${s.engName || ''}"`,
+                        `"${s.name || ''}"`,
+                        `"${s.gender || ''}"`,
+                        `"${s.house || ''}"`,
+                        ""
+                    ].join(",");
+                    csvHeader += row + "\n";
+                });
+            } else {
+                csvHeader += "1A,1,S1001,Chan Tai Man,陳大文,M,信,12\n1A,2,S1002,Wong Siu Ming,黃小明,F,望,15.5";
+            }
+
+            const blob = new Blob([csvHeader], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = `社際環校跑_現有名冊賽事填報表_${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function downloadCSVTemplate() {
+            const csvHeader = "班別,學號,學生證編號,Eng Name,中文姓名,性別,社\n";
+            const sampleRows = "1A,1,S1001,Chan Tai Man,陳大文,M,信\n1A,2,S1002,Wong Siu Ming,黃小明,F,望";
+            const blob = new Blob(["\uFEFF" + csvHeader + sampleRows], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "環校跑_學生名冊範本.csv";
+            link.click();
+        }
+
+        async function exportAnnualRecordsCSV() {
+            setApiBadge("讀取數據中...", "loading");
+            const res = await fetchFromGAS('getRawFinish');
+            if (res.status === 'success' && res.data && res.data.length > 0) {
+                let csvContent = "\uFEFF";
+                res.data.forEach(row => {
+                    csvContent += row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(",") + "\n";
+                });
+                const link = document.createElement("a");
+                link.href = URL.createObjectURL(new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }));
+                link.download = `環校跑_年度總紀錄_${new Date().toISOString().split('T')[0]}.csv`;
+                link.click();
+                setApiBadge("系統已連線", "ready");
+                alert("🎉 年度總紀錄 CSV 下載成功！");
+            } else {
+                setApiBadge("系統已連線", "ready");
+                alert("⚠️ 暫無紀錄可匯出。");
+            }
+        }
+
+        async function resetNewAcademicYear() {
+            if (!confirm("⚠️ 警告：確定要開啟新學年嗎？這將會徹底【刪除 Google Sheet 內所有跑圈紀錄與學生名冊】！")) return;
+            if (prompt("請輸入 [ RESET ] 以確認重置數據庫：") !== "RESET") return;
+
+            setApiBadge("重置數據庫中...", "loading");
+            const res = await postToGAS({ action: 'resetAcademicYear' });
+            if (res.status === 'success') {
+                alert("🎉 " + res.message);
+                await fetchRosterFromGAS();
+                await fetchLeaderboardFromGAS();
+                setApiBadge("系統已連線", "ready");
+            } else {
+                alert("❌ 重置失敗：" + res.message);
+            }
+        }
+
+        async function fetchFromGAS(action) {
+            try {
+                const response = await fetch(`${GAS_API_URL}?action=${action}&_t=${Date.now()}`);
+                return await response.json();
+            } catch (err) {
+                return { status: 'error', message: err.toString() };
+            }
+        }
+
+        async function postToGAS(payload, timeoutMs = 25000) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeoutMs);
+            try {
+                const response = await fetch(GAS_API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(payload),
+                    signal: controller.signal
+                });
+                clearTimeout(timer);
+                return await response.json();
+            } catch (err) {
+                clearTimeout(timer);
+                return { status: 'error', message: err.name === 'AbortError' ? '網絡超時，請重試！' : err.toString() };
+            }
+        }
+
+        async function fetchRosterFromGAS() {
+            setApiBadge("同步名冊中...", "loading");
+            const res = await fetchFromGAS('getRoster');
+            if (res.status === 'success' && res.data && res.data.length > 1) {
+                cachedRoster = res.data.slice(1).map(row => ({
+                    class: String(row[0]).trim(),
+                    classNo: parseInt(row[1]),
+                    studentId: String(row[2]).trim(),
+                    engName: String(row[3]).trim(),
+                    name: String(row[4]).trim(),
+                    gender: String(row[5]).trim(),
+                    house: String(row[6]).trim()
+                }));
+                populateClassDropdown();
+                setApiBadge("系統已連線", "ready");
+            } else {
+                cachedRoster = [];
+                populateClassDropdown();
+                setApiBadge("名冊空白", "warn");
+            }
+        }
+
+        async function fetchLeaderboardFromGAS() {
+            const res = await fetchFromGAS('getLeaderboard');
+            if (res.status === 'success' && res.data) {
+                rawFinishData = res.data.slice(1);
+                renderLeaderboard();
+            }
+        }
+
+        function populateClassDropdown() {
+            const classSelect = document.getElementById('inputClass');
+            classSelect.innerHTML = '<option value="">請選擇班別</option>';
+            [...new Set(cachedRoster.map(s => s.class))].sort().forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c; opt.textContent = c;
+                classSelect.appendChild(opt);
+            });
+        }
+
+        function autoLookupStudent() {
+            const cls = document.getElementById('inputClass').value;
+            const classNo = parseInt(document.getElementById('inputClassNo').value);
+            const nameInput = document.getElementById('inputName');
+            const houseBadge = document.getElementById('inputHouse');
+
+            if (!cls || !classNo) {
+                nameInput.value = '';
+                houseBadge.className = "text-xs font-bold px-3 py-1.5 rounded-md bg-slate-200 text-slate-600";
+                houseBadge.textContent = "未對應";
+                return;
+            }
+
+            const student = cachedRoster.find(s => s.class === cls && s.classNo === classNo);
+            if (student) {
+                nameInput.value = student.name + (student.engName ? ` (${student.engName})` : '');
+                houseBadge.textContent = student.house + "社";
+                houseBadge.className = `text-xs font-bold px-3 py-1.5 rounded-md house-${student.house}`;
+            } else {
+                nameInput.value = '未找到名冊數據';
+                houseBadge.className = "text-xs font-bold px-3 py-1.5 rounded-md bg-slate-200 text-slate-600";
+                houseBadge.textContent = "未知社別";
+            }
+        }
+
+        function liveCheckValidation() {
+            const startStr = document.getElementById('inputStartTime').value;
+            const endStr = document.getElementById('inputEndTime').value;
+            const laps = parseFloat(document.getElementById('inputLaps').value);
+
+            const box = document.getElementById('validationPreview');
+            const icon = document.getElementById('validIcon');
+            const text = document.getElementById('validText');
+            const pace = document.getElementById('paceText');
+
+            if (!startStr || !endStr || isNaN(laps) || laps <= 0) {
+                box.classList.add('hidden');
+                return true;
+            }
+
+            box.classList.remove('hidden');
+
+            const [sh, sm] = startStr.split(':').map(Number);
+            const [eh, em] = endStr.split(':').map(Number);
+            let startMin = sh * 60 + sm;
+            let endMin = eh * 60 + em;
+            if (endMin < startMin) endMin += 24 * 60;
+
+            const durationSec = (endMin - startMin) * 60;
+            const secondsPerLap = durationSec / laps;
+
+            if (durationSec <= 0) {
+                box.className = "p-3 rounded-lg border text-sm flex items-center justify-between bg-red-50 border-red-200 text-red-700";
+                icon.innerHTML = '<i class="fa-solid fa-circle-xmark text-red-500"></i>';
+                text.textContent = "無效紀錄：結束時間必須晚於開始時間";
+                pace.textContent = "";
+                return false;
+            }
+
+            if (secondsPerLap < 40) {
+                box.className = "p-3 rounded-lg border text-sm flex items-center justify-between bg-red-50 border-red-200 text-red-700";
+                icon.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-red-500"></i>';
+                text.textContent = "無效紀錄：配速過快（每圈少於 40 秒）";
+                pace.textContent = `平均每圈 ${secondsPerLap.toFixed(0)} 秒`;
+                return false;
+            } else if (secondsPerLap > 180) {
+                box.className = "p-3 rounded-lg border text-sm flex items-center justify-between bg-red-50 border-red-200 text-red-700";
+                icon.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-red-500"></i>';
+                text.textContent = "無效紀錄：配速過慢（每圈超過 3 分鐘）";
+                pace.textContent = `平均每圈 ${(secondsPerLap/60).toFixed(1)} 分鐘`;
+                return false;
+            } else {
+                box.className = "p-3 rounded-lg border text-sm flex items-center justify-between bg-emerald-50 border-emerald-200 text-emerald-800";
+                icon.innerHTML = '<i class="fa-solid fa-circle-check text-emerald-600"></i>';
+                text.textContent = "自動審核通過：數據正常 (Valid)";
+                pace.textContent = `平均每圈 ${secondsPerLap.toFixed(0)} 秒`;
+                return true;
+            }
+        }
+
+        async function handleFormSubmit(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btnSubmit');
+            const fileInput = document.getElementById('inputScreenshot');
+
+            if (fileInput.files.length === 0) {
+                alert("請上載 GPS 截圖相片！");
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 壓縮相片並上載中...`;
+
+            try {
+                const cls = document.getElementById('inputClass').value;
+                const classNo = parseInt(document.getElementById('inputClassNo').value);
+                const student = cachedRoster.find(s => s.class === cls && s.classNo === classNo);
+
+                const base64Data = await compressImage(fileInput.files[0], 800, 0.5);
+
+                const payload = {
+                    action: 'submitRun',
+                    data: {
+                        email: '',
+                        classCode: cls,
+                        classNo: classNo,
+                        house: student ? student.house : '未分配',
+                        laps: parseFloat(document.getElementById('inputLaps').value),
+                        date: document.getElementById('inputDate').value,
+                        startTime: document.getElementById('inputStartTime').value,
+                        endTime: document.getElementById('inputEndTime').value,
+                        fileName: `GPS_${cls}_${classNo}_${Date.now()}.jpg`,
+                        fileData: base64Data
+                    }
+                };
+
+                const res = await postToGAS(payload);
+
+                if (res.status === 'success') {
+                    alert(`✅ 紀錄與相片上載成功！\n相片已存入 Google Drive\n狀態：${res.runStatus} (${res.remark})`);
+                    document.getElementById('runForm').reset();
+                    document.getElementById('validationPreview').classList.add('hidden');
+                    await fetchLeaderboardFromGAS();
+                    switchTab('leaderboard');
+                } else {
+                    alert("❌ 提交失敗：" + res.message);
+                }
+            } catch (err) {
+                alert("❌ 處理失敗：" + err.message);
+            }
+
+            btn.disabled = false;
+            btn.innerHTML = `<span>提交紀錄至 Google Sheet</span>`;
+        }
+
+        function renderLeaderboard() {
+            const genderFilter = document.getElementById('filterGender').value;
+            const gradeFilter = document.getElementById('filterGrade').value;
+
+            let list = getRankedList();
+
+            if (genderFilter !== 'ALL') list = list.filter(i => i.gender === genderFilter);
+            if (gradeFilter !== 'ALL') list = list.filter(i => i.class.startsWith(gradeFilter));
+
+            const tbody = document.getElementById('leaderboardBody');
+            tbody.innerHTML = '';
+
+            if (list.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-slate-400">暫無 Valid 紀錄</td></tr>`;
+                return;
+            }
+
+            list.forEach((item, idx) => {
+                const rank = idx + 1;
+                let rankBadge = `<span class="font-bold text-slate-500">${rank}</span>`;
+                if (rank === 1) rankBadge = `<span class="bg-amber-400 text-amber-900 font-extrabold px-2.5 py-0.5 rounded-full text-xs shadow-sm"><i class="fa-solid fa-crown"></i> 1</span>`;
+                if (rank === 2) rankBadge = `<span class="bg-slate-300 text-slate-800 font-extrabold px-2 py-0.5 rounded-full text-xs">2</span>`;
+                if (rank === 3) rankBadge = `<span class="bg-amber-700 text-white font-extrabold px-2 py-0.5 rounded-full text-xs">3</span>`;
+
+                const tr = document.createElement('tr');
+                tr.className = rank <= 3 ? "bg-amber-50/40 font-semibold" : "hover:bg-slate-50";
+                tr.innerHTML = `
+                    <td class="p-3">${rankBadge}</td>
+                    <td class="p-3 font-medium">${item.class}</td>
+                    <td class="p-3 text-slate-500">${item.classNo}</td>
+                    <td class="p-3 text-slate-900 font-bold">${item.name}</td>
+                    <td class="p-3 text-xs">${item.gender === 'M' ? '<span class="text-blue-600">男</span>' : '<span class="text-pink-600">女</span>'}</td>
+                    <td class="p-3"><span class="text-xs font-bold px-2 py-0.5 rounded house-${item.house}">${item.house}社</span></td>
+                    <td class="p-3 text-right font-extrabold text-indigo-700 text-base">${item.totalLaps} 圈</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        async function handleHouseCSVUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const statusBox = document.getElementById('houseUploadStatus');
+            statusBox.classList.remove('hidden');
+            statusBox.className = "p-3 rounded-lg text-xs font-semibold bg-amber-50 text-amber-800";
+            statusBox.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 上載並覆蓋更新社際賽事數據中...`;
+
+            const reader = new FileReader();
+            reader.onload = async function(evt) {
+                const rows = evt.target.result.split(/\r\n|\n/).filter(l => l.trim()).map(l => l.split(',').map(c => c.trim().replace(/^"|"$/g, '')));
+                if (rows.length > 1) {
+                    const res = await postToGAS({ action: 'uploadHouseRunCSV', rows: rows });
+                    if (res.status === 'success') {
+                        statusBox.className = "p-3 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700";
+                        statusBox.textContent = "🎉 " + res.message;
+                        await fetchRosterFromGAS();
+                        await fetchLeaderboardFromGAS();
+                    } else {
+                        statusBox.className = "p-3 rounded-lg text-xs font-semibold bg-red-50 text-red-700";
+                        statusBox.textContent = "❌ 上載失敗：" + res.message;
+                    }
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        async function handleCSVUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const statusBox = document.getElementById('uploadStatus');
+            statusBox.classList.remove('hidden');
+            statusBox.className = "p-3 rounded-lg text-xs font-semibold bg-blue-50 text-blue-700";
+            statusBox.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 覆蓋更新名冊中...`;
+
+            const reader = new FileReader();
+            reader.onload = async function(evt) {
+                const rows = evt.target.result.split(/\r\n|\n/).filter(l => l.trim()).map(l => l.split(',').map(c => c.trim().replace(/^"|"$/g, '')));
+                if (rows.length > 1) {
+                    const res = await postToGAS({ action: 'uploadCSV', rows: rows });
+                    if (res.status === 'success') {
+                        statusBox.className = "p-3 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700";
+                        statusBox.textContent = "🎉 " + res.message;
+                        await fetchRosterFromGAS();
+                        await fetchLeaderboardFromGAS();
+                    } else {
+                        statusBox.className = "p-3 rounded-lg text-xs font-semibold bg-red-50 text-red-700";
+                        statusBox.textContent = "❌ 上傳失敗：" + res.message;
+                    }
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function lockAdminSession() {
+            isAdminAuthenticated = false;
+            switchTab('submit');
+            alert("🔒 已鎖定管理員頁面。");
+        }
+
+        function setApiBadge(msg, type) {
+            const badge = document.getElementById('apiStatusBadge');
+            badge.className = type === 'ready' ? "text-xs bg-emerald-900 text-emerald-200 px-3 py-1 rounded-full border border-emerald-400" : (type === 'warn' ? "text-xs bg-amber-900 text-amber-200 px-3 py-1 rounded-full border border-amber-400" : "text-xs bg-indigo-900 text-indigo-200 px-3 py-1 rounded-full border border-indigo-400");
+            badge.innerHTML = type === 'ready' ? `<i class="fa-solid fa-circle-check"></i> ${msg}` : `<i class="fa-solid fa-spinner fa-spin"></i> ${msg}`;
+        }
+
+        function switchTab(tabName) {
+            if (tabName === 'admin' && !isAdminAuthenticated) {
+                const inputPw = prompt("🔒 請輸入管理員密碼：");
+                if (inputPw === ADMIN_PASSWORD) isAdminAuthenticated = true;
+                else { if(inputPw !== null) alert("❌ 密碼錯誤！"); return; }
+            }
+
+            document.getElementById('sec-submit').classList.add('hidden');
+            document.getElementById('sec-leaderboard').classList.add('hidden');
+            document.getElementById('sec-admin').classList.add('hidden');
+            document.getElementById('tab-submit').classList.remove('tab-active');
+            document.getElementById('tab-leaderboard').classList.remove('tab-active');
+            document.getElementById('tab-admin').classList.remove('tab-active');
+
+            document.getElementById(`sec-${tabName}`).classList.remove('hidden');
+            document.getElementById(`tab-${tabName}`).classList.add('tab-active');
+        }
+
+        window.onload = initApp;
+    </script>
+</body>
+</html>

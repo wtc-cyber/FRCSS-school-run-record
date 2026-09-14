@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>禮賢環校跑紀錄系統及即時個人排行榜</title>
+    <title>環校跑自主紀錄及即時個人排行榜</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -26,7 +26,7 @@
         <div class="max-w-5xl mx-auto px-4 py-3 flex justify-between items-center">
             <div class="flex items-center space-x-3">
                 <i class="fa-solid fa-person-running text-2xl text-yellow-300"></i>
-                <h1 class="text-xl font-bold tracking-wide">禮賢環校跑紀錄系統</h1>
+                <h1 class="text-xl font-bold tracking-wide">環校跑自主紀錄系統</h1>
             </div>
             <div class="flex items-center space-x-3">
                 <button onclick="openTVMode()" class="bg-amber-400 hover:bg-amber-500 text-indigo-950 font-black text-xs px-3 py-1.5 rounded-lg shadow transition flex items-center gap-1.5">
@@ -38,14 +38,17 @@
             </div>
         </div>
         <!-- Navigation Tabs -->
-        <div class="bg-indigo-800 text-indigo-100 flex justify-center text-sm font-medium">
-            <button onclick="switchTab('submit')" id="tab-submit" class="px-6 py-2.5 tab-active flex items-center gap-2">
+        <div class="bg-indigo-800 text-indigo-100 flex justify-center text-sm font-medium overflow-x-auto">
+            <button onclick="switchTab('submit')" id="tab-submit" class="px-5 py-2.5 tab-active flex items-center gap-2 whitespace-nowrap">
                 <i class="fa-solid fa-pen-to-square"></i> 學生跑步登記
             </button>
-            <button onclick="switchTab('leaderboard')" id="tab-leaderboard" class="px-6 py-2.5 flex items-center gap-2">
+            <button onclick="switchTab('leaderboard')" id="tab-leaderboard" class="px-5 py-2.5 flex items-center gap-2 whitespace-nowrap">
                 <i class="fa-solid fa-trophy text-yellow-300"></i> 個人排行榜
             </button>
-            <button onclick="switchTab('admin')" id="tab-admin" class="px-6 py-2.5 flex items-center gap-2">
+            <button onclick="switchTab('history')" id="tab-history" class="px-5 py-2.5 flex items-center gap-2 whitespace-nowrap">
+                <i class="fa-solid fa-clock-rotate-left text-cyan-300"></i> 個人紀錄查詢
+            </button>
+            <button onclick="switchTab('admin')" id="tab-admin" class="px-5 py-2.5 flex items-center gap-2 whitespace-nowrap">
                 <i class="fa-solid fa-lock text-yellow-300"></i> 學年管理 / 匯出紀錄
             </button>
         </div>
@@ -181,19 +184,71 @@
             </div>
         </section>
 
-        <!-- 3. Admin / CSV Upload & Year Reset Section -->
+        <!-- 🔍 3. 個人紀錄查詢功能 (全新區塊) -->
+        <section id="sec-history" class="hidden">
+            <div class="bg-white rounded-xl shadow-md p-6 border border-slate-200 space-y-6">
+                <div class="border-b pb-4">
+                    <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-clock-rotate-left text-indigo-600"></i> 個人過往跑圈紀錄查詢
+                    </h2>
+                    <p class="text-xs text-slate-500 mt-0.5">輸入班別及學號，即可查看包含審核原因及 Invalid 紀錄明細</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-indigo-50/60 p-4 rounded-xl border border-indigo-100 items-end">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">班別</label>
+                        <select id="historyClass" class="w-full border rounded-lg p-2 text-sm bg-white border-slate-300 focus:ring-2 focus:ring-indigo-500">
+                            <option value="">載入中...</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">學號</label>
+                        <input type="number" id="historyClassNo" min="1" max="45" placeholder="例如: 8" class="w-full border rounded-lg p-2 text-sm bg-white border-slate-300 focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <button onclick="queryStudentHistory()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow transition text-sm flex justify-center items-center gap-2">
+                        <i class="fa-solid fa-magnifying-glass"></i> 查詢我的紀錄
+                    </button>
+                </div>
+
+                <div id="historyResultContainer" class="hidden space-y-4">
+                    <div class="flex justify-between items-center bg-slate-100 p-3 rounded-lg text-sm">
+                        <span id="historyStudentInfo" class="font-bold text-slate-800"></span>
+                        <span id="historyTotalSummary" class="text-xs bg-indigo-100 text-indigo-800 font-bold px-3 py-1 rounded-full border border-indigo-200"></span>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm">
+                            <thead class="bg-slate-100 text-slate-600 text-xs uppercase border-b">
+                                <tr>
+                                    <th class="p-3">類型</th>
+                                    <th class="p-3">日期</th>
+                                    <th class="p-3">時間段</th>
+                                    <th class="p-3 text-center">圈數</th>
+                                    <th class="p-3 text-center">狀態</th>
+                                    <th class="p-3">審核備註 / 原因</th>
+                                    <th class="p-3 text-center">證明相片</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historyTableBody" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. Admin / CSV Upload & Year Reset Section -->
         <section id="sec-admin" class="hidden space-y-6">
             
             <div class="flex justify-between items-center bg-indigo-50 border border-indigo-100 p-3 rounded-lg">
                 <span class="text-xs font-semibold text-indigo-800 flex items-center gap-1.5">
-                    <i class="fa-solid fa-user-shield text-indigo-600"></i> 管理員身分已驗證成功 (pw: 920206)
+                    <i class="fa-solid fa-user-shield text-indigo-600"></i> 管理員權限驗證成功 (後端安全校對)
                 </span>
                 <div class="flex gap-2">
                     <button onclick="openTVMode()" class="bg-amber-400 hover:bg-amber-500 text-indigo-950 font-black text-xs px-3 py-1.5 rounded flex items-center gap-1 shadow">
                         <i class="fa-solid fa-tv"></i> 開啟電視廣播 Mode
                     </button>
                     <button onclick="lockAdminSession()" class="text-xs bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1.5 rounded flex items-center gap-1 transition">
-                        <i class="fa-solid fa-lock"></i> 鎖定頁面
+                        <i class="fa-solid fa-lock"></i> 鎖定管理頁面
                     </button>
                 </div>
             </div>
@@ -223,7 +278,7 @@
                 <div id="houseUploadStatus" class="hidden p-3 rounded-lg text-xs font-semibold"></div>
             </div>
 
-            <!-- 上載學生名冊 (含覆蓋與圈數安全說明) -->
+            <!-- 上載學生名冊 -->
             <div class="bg-white rounded-xl shadow-md p-6 border border-slate-200 space-y-6">
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b pb-4">
                     <div>
@@ -342,9 +397,8 @@
 
     <script>
         const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzzOpHV2q-Y6GpNb-TubhJguAct3Pa2X3Cq3elzIARwt34LKJvc7L9wuxGGhIbs6kkW/exec";
-        const ADMIN_PASSWORD = "920206";
 
-        let isAdminAuthenticated = false;
+        let isAdminAuthenticated = false; // 🔒 密碼已完全移至後端驗證，前端無任何密碼明文
         let cachedRoster = [];
         let rawFinishData = [];
 
@@ -467,6 +521,68 @@
             });
 
             return Object.values(totals).sort((a, b) => b.totalLaps - a.totalLaps);
+        }
+
+        // 🔍 個人過往紀錄查詢函式
+        async function queryStudentHistory() {
+            const cls = document.getElementById('historyClass').value;
+            const classNo = parseInt(document.getElementById('historyClassNo').value);
+
+            if (!cls || isNaN(classNo)) {
+                alert("請選擇班別並輸入學號！");
+                return;
+            }
+
+            setApiBadge("查詢紀錄中...", "loading");
+            const res = await fetchFromGAS(`getStudentHistory&classCode=${cls}&classNo=${classNo}`);
+            setApiBadge("系統已連線", "ready");
+
+            const container = document.getElementById('historyResultContainer');
+            const tbody = document.getElementById('historyTableBody');
+            const studentInfo = document.getElementById('historyStudentInfo');
+            const totalSummary = document.getElementById('historyTotalSummary');
+
+            container.classList.remove('hidden');
+            tbody.innerHTML = '';
+
+            const student = cachedRoster.find(s => s.class === cls && s.classNo === classNo);
+            studentInfo.textContent = `${cls} 班 ${classNo} 號 ${student ? student.name : ''}`;
+
+            if (res.status === 'success' && res.history && res.history.length > 0) {
+                let validTotal = 0;
+
+                res.history.forEach(item => {
+                    const isValid = item.status === 'Valid';
+                    if (isValid) validTotal += item.laps;
+
+                    const tr = document.createElement('tr');
+                    tr.className = "hover:bg-slate-50";
+
+                    const statusBadge = isValid 
+                        ? `<span class="bg-emerald-100 text-emerald-800 font-bold px-2.5 py-0.5 rounded text-xs"><i class="fa-solid fa-check"></i> Valid</span>`
+                        : `<span class="bg-red-100 text-red-800 font-bold px-2.5 py-0.5 rounded text-xs"><i class="fa-solid fa-xmark"></i> Invalid</span>`;
+
+                    const photoBtn = item.fileUrl && item.fileUrl.startsWith('http')
+                        ? `<a href="${item.fileUrl}" target="_blank" class="text-indigo-600 hover:text-indigo-800 font-bold text-xs underline flex items-center justify-center gap-1"><i class="fa-solid fa-image"></i> 查看</a>`
+                        : `<span class="text-slate-400 text-xs">無</span>`;
+
+                    tr.innerHTML = `
+                        <td class="p-3"><span class="text-xs px-2 py-1 rounded bg-slate-100 font-semibold text-slate-700">${item.type}</span></td>
+                        <td class="p-3 font-medium">${item.date}</td>
+                        <td class="p-3 text-slate-500 text-xs">${item.time}</td>
+                        <td class="p-3 text-center font-bold text-slate-900">${item.laps} 圈</td>
+                        <td class="p-3 text-center">${statusBadge}</td>
+                        <td class="p-3 text-xs text-slate-600">${item.remark || '自動審核通過'}</td>
+                        <td class="p-3 text-center">${photoBtn}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+                totalSummary.textContent = `有效總累積圈數：${validTotal} 圈`;
+            } else {
+                tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-slate-400">未找到 ${cls} 班 ${classNo} 號的跑步紀錄</td></tr>`;
+                totalSummary.textContent = `有效總累積圈數：0 圈`;
+            }
         }
 
         function compressImage(file, maxWidth = 800, quality = 0.5) {
@@ -633,12 +749,12 @@
 
         function populateClassDropdown() {
             const classSelect = document.getElementById('inputClass');
-            classSelect.innerHTML = '<option value="">請選擇班別</option>';
-            [...new Set(cachedRoster.map(s => s.class))].sort().forEach(c => {
-                const opt = document.createElement('option');
-                opt.value = c; opt.textContent = c;
-                classSelect.appendChild(opt);
-            });
+            const historyClassSelect = document.getElementById('historyClass');
+
+            const classOptions = '<option value="">請選擇班別</option>' + [...new Set(cachedRoster.map(s => s.class))].sort().map(c => `<option value="${c}">${c}</option>`).join('');
+
+            if (classSelect) classSelect.innerHTML = classOptions;
+            if (historyClassSelect) historyClassSelect.innerHTML = classOptions;
         }
 
         function autoLookupStudent() {
@@ -883,18 +999,32 @@
             badge.innerHTML = type === 'ready' ? `<i class="fa-solid fa-circle-check"></i> ${msg}` : `<i class="fa-solid fa-spinner fa-spin"></i> ${msg}`;
         }
 
-        function switchTab(tabName) {
+        // 🔒 升級：切換至管理頁面時向 Google Apps Script 後端發送密碼驗證
+        async function switchTab(tabName) {
             if (tabName === 'admin' && !isAdminAuthenticated) {
                 const inputPw = prompt("🔒 請輸入管理員密碼：");
-                if (inputPw === ADMIN_PASSWORD) isAdminAuthenticated = true;
-                else { if(inputPw !== null) alert("❌ 密碼錯誤！"); return; }
+                if (inputPw === null) return;
+
+                setApiBadge("驗證密碼中...", "loading");
+                const res = await postToGAS({ action: 'verifyAdmin', password: inputPw });
+                setApiBadge("系統已連線", "ready");
+
+                if (res.status === 'success') {
+                    isAdminAuthenticated = true;
+                } else {
+                    alert("❌ " + (res.message || "密碼錯誤！"));
+                    return;
+                }
             }
 
             document.getElementById('sec-submit').classList.add('hidden');
             document.getElementById('sec-leaderboard').classList.add('hidden');
+            document.getElementById('sec-history').classList.add('hidden');
             document.getElementById('sec-admin').classList.add('hidden');
+
             document.getElementById('tab-submit').classList.remove('tab-active');
             document.getElementById('tab-leaderboard').classList.remove('tab-active');
+            document.getElementById('tab-history').classList.remove('tab-active');
             document.getElementById('tab-admin').classList.remove('tab-active');
 
             document.getElementById(`sec-${tabName}`).classList.remove('hidden');
